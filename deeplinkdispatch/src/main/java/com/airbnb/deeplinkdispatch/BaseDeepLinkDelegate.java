@@ -144,6 +144,182 @@ public class BaseDeepLinkDelegate {
     }
   }
 
+  public Intent getIntent(Activity activity, Intent sourceIntent) throws Exception {
+    if (activity == null) {
+      throw new NullPointerException("activity == null");
+    }
+    if (sourceIntent == null) {
+      throw new NullPointerException("sourceIntent == null");
+    }
+    Uri uri = sourceIntent.getData();
+    if (uri == null) {
+      throw new Exception("No Uri in given activity's intent.");
+    }
+    String uriString = uri.toString();
+    DeepLinkEntry entry = findEntry(uriString);
+    if (entry != null) {
+      DeepLinkUri deepLinkUri = DeepLinkUri.parse(uriString);
+      Map<String, String> parameterMap = entry.getParameters(uriString);
+      for (String queryParameter : deepLinkUri.queryParameterNames()) {
+        for (String queryParameterValue : deepLinkUri.queryParameterValues(queryParameter)) {
+          if (parameterMap.containsKey(queryParameter)) {
+            Log.w(TAG, "Duplicate parameter name in path and query param: " + queryParameter);
+          }
+          parameterMap.put(queryParameter, queryParameterValue);
+        }
+      }
+      parameterMap.put(DeepLink.URI, uri.toString());
+      Bundle parameters;
+      if (sourceIntent.getExtras() != null) {
+        parameters = new Bundle(sourceIntent.getExtras());
+      } else {
+        parameters = new Bundle();
+      }
+      for (Map.Entry<String, String> parameterEntry : parameterMap.entrySet()) {
+        parameters.putString(parameterEntry.getKey(), parameterEntry.getValue());
+      }
+
+      Class<?> c = entry.getActivityClass();
+      Intent newIntent;
+      TaskStackBuilder taskStackBuilder = null;
+      if (entry.getType() == DeepLinkEntry.Type.CLASS) {
+        newIntent = new Intent(activity, c);
+      } else {
+        Method method;
+        try {
+          method = c.getMethod(entry.getMethod(), Context.class);
+          if (method.getReturnType().equals(TaskStackBuilder.class)) {
+            taskStackBuilder = (TaskStackBuilder) method.invoke(c, activity);
+            if (taskStackBuilder.getIntentCount() == 0) {
+              throw new Exception("Could not deep link to method: " + entry.getMethod() + " intents length == 0");
+            }
+            newIntent = taskStackBuilder.editIntentAt(taskStackBuilder.getIntentCount() - 1);
+          } else {
+            newIntent = (Intent) method.invoke(c, activity);
+          }
+        } catch (NoSuchMethodException exception) {
+          method = c.getMethod(entry.getMethod(), Context.class, Bundle.class);
+          if (method.getReturnType().equals(TaskStackBuilder.class)) {
+            taskStackBuilder = (TaskStackBuilder) method.invoke(c, activity, parameters);
+            if (taskStackBuilder.getIntentCount() == 0) {
+              return null;
+            }
+            newIntent = taskStackBuilder.editIntentAt(taskStackBuilder.getIntentCount() - 1);
+          } else {
+            newIntent = (Intent) method.invoke(c, activity, parameters);
+          }
+        }
+      }
+      if (newIntent.getAction() == null) {
+        newIntent.setAction(sourceIntent.getAction());
+      }
+      if (newIntent.getData() == null) {
+        newIntent.setData(sourceIntent.getData());
+      }
+      newIntent.putExtras(parameters);
+      newIntent.putExtra(DeepLink.IS_DEEP_LINK, true);
+      newIntent.putExtra(DeepLink.REFERRER_URI, uri);
+      if (activity.getCallingActivity() != null) {
+        newIntent.setFlags(Intent.FLAG_ACTIVITY_FORWARD_RESULT);
+      }
+      if (taskStackBuilder != null) {
+        throw new Exception("Instead of intent, applink produce a TaskStackBuilder instance");
+      } else {
+        return newIntent;
+      }
+    } else {
+      return null;
+    }
+  }
+
+    public TaskStackBuilder getTaskStackBuilder(Activity activity, Intent sourceIntent) throws Exception {
+        if (activity == null) {
+            throw new NullPointerException("activity == null");
+        }
+        if (sourceIntent == null) {
+            throw new NullPointerException("sourceIntent == null");
+        }
+        Uri uri = sourceIntent.getData();
+        if (uri == null) {
+            throw new Exception("No Uri in given activity's intent.");
+        }
+        String uriString = uri.toString();
+        DeepLinkEntry entry = findEntry(uriString);
+        if (entry != null) {
+            DeepLinkUri deepLinkUri = DeepLinkUri.parse(uriString);
+            Map<String, String> parameterMap = entry.getParameters(uriString);
+            for (String queryParameter : deepLinkUri.queryParameterNames()) {
+                for (String queryParameterValue : deepLinkUri.queryParameterValues(queryParameter)) {
+                    if (parameterMap.containsKey(queryParameter)) {
+                        Log.w(TAG, "Duplicate parameter name in path and query param: " + queryParameter);
+                    }
+                    parameterMap.put(queryParameter, queryParameterValue);
+                }
+            }
+            parameterMap.put(DeepLink.URI, uri.toString());
+            Bundle parameters;
+            if (sourceIntent.getExtras() != null) {
+                parameters = new Bundle(sourceIntent.getExtras());
+            } else {
+                parameters = new Bundle();
+            }
+            for (Map.Entry<String, String> parameterEntry : parameterMap.entrySet()) {
+                parameters.putString(parameterEntry.getKey(), parameterEntry.getValue());
+            }
+
+            Class<?> c = entry.getActivityClass();
+            Intent newIntent;
+            TaskStackBuilder taskStackBuilder = null;
+            if (entry.getType() == DeepLinkEntry.Type.CLASS) {
+                newIntent = new Intent(activity, c);
+            } else {
+                Method method;
+                try {
+                    method = c.getMethod(entry.getMethod(), Context.class);
+                    if (method.getReturnType().equals(TaskStackBuilder.class)) {
+                        taskStackBuilder = (TaskStackBuilder) method.invoke(c, activity);
+                        if (taskStackBuilder.getIntentCount() == 0) {
+                            throw new Exception("Could not deep link to method: " + entry.getMethod() + " intents length == 0");
+                        }
+                        newIntent = taskStackBuilder.editIntentAt(taskStackBuilder.getIntentCount() - 1);
+                    } else {
+                        newIntent = (Intent) method.invoke(c, activity);
+                    }
+                } catch (NoSuchMethodException exception) {
+                    method = c.getMethod(entry.getMethod(), Context.class, Bundle.class);
+                    if (method.getReturnType().equals(TaskStackBuilder.class)) {
+                        taskStackBuilder = (TaskStackBuilder) method.invoke(c, activity, parameters);
+                        if (taskStackBuilder.getIntentCount() == 0) {
+                            return null;
+                        }
+                        newIntent = taskStackBuilder.editIntentAt(taskStackBuilder.getIntentCount() - 1);
+                    } else {
+                        newIntent = (Intent) method.invoke(c, activity, parameters);
+                    }
+                }
+            }
+            if (newIntent.getAction() == null) {
+                newIntent.setAction(sourceIntent.getAction());
+            }
+            if (newIntent.getData() == null) {
+                newIntent.setData(sourceIntent.getData());
+            }
+            newIntent.putExtras(parameters);
+            newIntent.putExtra(DeepLink.IS_DEEP_LINK, true);
+            newIntent.putExtra(DeepLink.REFERRER_URI, uri);
+            if (activity.getCallingActivity() != null) {
+                newIntent.setFlags(Intent.FLAG_ACTIVITY_FORWARD_RESULT);
+            }
+            if (taskStackBuilder != null) {
+                return taskStackBuilder;
+            } else {
+                throw new Exception("Instead of TaskStackBuilder, applink produce an Intent instance");
+            }
+        } else {
+            throw new Exception("No registered entity to handle deep link: " + uri.toString());
+        }
+    }
+
   private static DeepLinkResult createResultAndNotify(Context context, final boolean successful,
                                                       final Uri uri, final String error) {
     notifyListener(context, !successful, uri, error);
