@@ -181,7 +181,6 @@ public class BaseDeepLinkDelegate {
 
       Class<?> c = entry.getActivityClass();
       Intent newIntent;
-      TaskStackBuilder taskStackBuilder = null;
       if (entry.getType() == DeepLinkEntry.Type.CLASS) {
         newIntent = new Intent(activity, c);
       } else {
@@ -189,22 +188,14 @@ public class BaseDeepLinkDelegate {
         try {
           method = c.getMethod(entry.getMethod(), Context.class);
           if (method.getReturnType().equals(TaskStackBuilder.class)) {
-            taskStackBuilder = (TaskStackBuilder) method.invoke(c, activity);
-            if (taskStackBuilder.getIntentCount() == 0) {
-              throw new Exception("Could not deep link to method: " + entry.getMethod() + " intents length == 0");
-            }
-            newIntent = taskStackBuilder.editIntentAt(taskStackBuilder.getIntentCount() - 1);
+            throw new Exception("Instead of intent, applink produce a TaskStackBuilder instance");
           } else {
             newIntent = (Intent) method.invoke(c, activity);
           }
         } catch (NoSuchMethodException exception) {
           method = c.getMethod(entry.getMethod(), Context.class, Bundle.class);
           if (method.getReturnType().equals(TaskStackBuilder.class)) {
-            taskStackBuilder = (TaskStackBuilder) method.invoke(c, activity, parameters);
-            if (taskStackBuilder.getIntentCount() == 0) {
-              return null;
-            }
-            newIntent = taskStackBuilder.editIntentAt(taskStackBuilder.getIntentCount() - 1);
+            throw new Exception("Instead of intent, applink produce a TaskStackBuilder instance");
           } else {
             newIntent = (Intent) method.invoke(c, activity, parameters);
           }
@@ -222,11 +213,8 @@ public class BaseDeepLinkDelegate {
       if (activity.getCallingActivity() != null) {
         newIntent.setFlags(Intent.FLAG_ACTIVITY_FORWARD_RESULT);
       }
-      if (taskStackBuilder != null) {
-        throw new Exception("Instead of intent, applink produce a TaskStackBuilder instance");
-      } else {
-        return newIntent;
-      }
+
+      return newIntent;
     } else {
       return null;
     }
@@ -268,11 +256,8 @@ public class BaseDeepLinkDelegate {
             }
 
             Class<?> c = entry.getActivityClass();
-            Intent newIntent;
             TaskStackBuilder taskStackBuilder = null;
-            if (entry.getType() == DeepLinkEntry.Type.CLASS) {
-                newIntent = new Intent(activity, c);
-            } else {
+            if (entry.getType() != DeepLinkEntry.Type.CLASS) {
                 Method method;
                 try {
                     method = c.getMethod(entry.getMethod(), Context.class);
@@ -281,9 +266,8 @@ public class BaseDeepLinkDelegate {
                         if (taskStackBuilder.getIntentCount() == 0) {
                             throw new Exception("Could not deep link to method: " + entry.getMethod() + " intents length == 0");
                         }
-                        newIntent = taskStackBuilder.editIntentAt(taskStackBuilder.getIntentCount() - 1);
                     } else {
-                        newIntent = (Intent) method.invoke(c, activity);
+                        throw new Exception("Instead of TaskStackBuilder, applink produce an Intent instance");
                     }
                 } catch (NoSuchMethodException exception) {
                     method = c.getMethod(entry.getMethod(), Context.class, Bundle.class);
@@ -292,24 +276,14 @@ public class BaseDeepLinkDelegate {
                         if (taskStackBuilder.getIntentCount() == 0) {
                             return null;
                         }
-                        newIntent = taskStackBuilder.editIntentAt(taskStackBuilder.getIntentCount() - 1);
                     } else {
-                        newIntent = (Intent) method.invoke(c, activity, parameters);
+                        throw new Exception("Instead of TaskStackBuilder, applink produce an Intent instance");
                     }
                 }
+            } else {
+                throw new Exception("Instead of TaskStackBuilder, applink produce an Intent instance");
             }
-            if (newIntent.getAction() == null) {
-                newIntent.setAction(sourceIntent.getAction());
-            }
-            if (newIntent.getData() == null) {
-                newIntent.setData(sourceIntent.getData());
-            }
-            newIntent.putExtras(parameters);
-            newIntent.putExtra(DeepLink.IS_DEEP_LINK, true);
-            newIntent.putExtra(DeepLink.REFERRER_URI, uri);
-            if (activity.getCallingActivity() != null) {
-                newIntent.setFlags(Intent.FLAG_ACTIVITY_FORWARD_RESULT);
-            }
+
             if (taskStackBuilder != null) {
                 return taskStackBuilder;
             } else {

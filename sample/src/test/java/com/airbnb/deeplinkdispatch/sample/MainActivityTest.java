@@ -1,5 +1,6 @@
 package com.airbnb.deeplinkdispatch.sample;
 
+import android.app.Activity;
 import android.content.ComponentName;
 import android.content.Intent;
 import android.net.Uri;
@@ -13,6 +14,7 @@ import org.robolectric.Robolectric;
 import org.robolectric.RobolectricTestRunner;
 import org.robolectric.RuntimeEnvironment;
 import org.robolectric.annotation.Config;
+import org.robolectric.shadow.api.Shadow;
 import org.robolectric.shadows.ShadowActivity;
 import org.robolectric.shadows.ShadowApplication;
 
@@ -20,6 +22,7 @@ import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThat;
+import static org.junit.Assert.assertTrue;
 import static org.robolectric.Shadows.shadowOf;
 
 @Config(sdk = 21, manifest = "../sample/src/main/AndroidManifest.xml", shadows = {ShadowTaskStackBuilder.class})
@@ -44,6 +47,25 @@ public class MainActivityTest {
     assertThat(launchedIntent.getData(), equalTo(Uri.parse("dld://host/somePath/1234321")));
     assertThat(launchedIntent.getStringExtra(DeepLink.URI),
         equalTo("dld://host/somePath/1234321"));
+  }
+
+  @Test public void testGetIntent() {
+    Intent intent = new Intent();
+    String path = "dld://classDeepLink?foo=bar";
+    intent.setData(Uri.parse(path));
+    Activity deepLinkActivity = Robolectric.buildActivity(DeepLinkActivity.class, intent).create().get();
+
+    Intent launchedIntent = null;
+    DeepLinkDelegate deepLinkDelegate = new DeepLinkDelegate(new SampleModuleLoader(), new LibraryDeepLinkModuleLoader());
+    try {
+      launchedIntent = deepLinkDelegate.getIntent(deepLinkActivity, intent);
+      assertTrue(launchedIntent != null);
+      assertThat(launchedIntent.getComponent(), equalTo(new ComponentName(deepLinkActivity, MainActivity.class)));
+      assertThat(launchedIntent.getData(), equalTo(Uri.parse(path)));
+      assertThat(launchedIntent.getStringExtra(DeepLink.URI), equalTo(path));
+    } catch (Exception e) {
+      e.printStackTrace();
+    }
   }
 
   @Test public void testQueryParams() {
